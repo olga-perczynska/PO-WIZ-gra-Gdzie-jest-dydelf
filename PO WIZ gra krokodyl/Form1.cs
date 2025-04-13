@@ -25,5 +25,10 @@ namespace PO_WIZ_gra_krokodyl
             gameForm.Show();
 
         }
+
+        private void bKoniec_Click(object sender, EventArgs e)
+        {
+            Application.Exit();
+        }
     }
 }

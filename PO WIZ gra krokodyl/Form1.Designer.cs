@@ -62,6 +62,7 @@
             bKoniec.TabIndex = 2;
             bKoniec.Text = "Koniec";
             bKoniec.UseVisualStyleBackColor = true;
+            bKoniec.Click += bKoniec_Click;
             // 
             // label1
             // 

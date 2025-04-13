@@ -1,13 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
-
 
 namespace PO_WIZ_gra_krokodyl
 {
@@ -15,31 +10,50 @@ namespace PO_WIZ_gra_krokodyl
     {
         private System.Windows.Forms.Timer timer;
         private int czasPozostaly;
-
         private Settings ustawienia;
+        private Dictionary<Button, DateTime> odkryteKrokodyle = new Dictionary<Button, DateTime>();
+        private int odkryteDydelfy = 0;
+        private Label lblCzas;
+        private Panel panelCzas;
 
         public Form3(Settings settings)
         {
             InitializeComponent();
+
             ustawienia = settings;
             StworzPlansze();
             czasPozostaly = ustawienia.czas;
+
             timer = new System.Windows.Forms.Timer();
-            timer.Interval = 1000;  
-            timer.Tick += Timer_Tick;  
+            timer.Interval = 1000;
+            timer.Tick += Timer_Tick;
             timer.Start();
         }
 
         private void Timer_Tick(object sender, EventArgs e)
         {
+            lblCzas.Text = $"Czas: {czasPozostaly}s";
+
             czasPozostaly--;
-            //lblCzas.Text = "Czas: " + czasPozostaly + "s";
 
             if (czasPozostaly <= 0)
             {
-                timer.Stop();  
+                timer.Stop();
                 MessageBox.Show("Przegrałeś, czas się skończył", "Koniec gry", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                this.Close();  
+                this.Close();
+                return;
+            }
+
+            var teraz = DateTime.Now;
+            foreach (var entry in odkryteKrokodyle.ToList())
+            {
+                if ((teraz - entry.Value).TotalSeconds >= 2)
+                {
+                    timer.Stop();
+                    MessageBox.Show("Przegrałeś! Nie zakryłeś krokodyla na czas.");
+                    this.Close();
+                    return;
+                }
             }
         }
 
@@ -61,15 +75,14 @@ namespace PO_WIZ_gra_krokodyl
                     btn.Height = buttonSize;
                     btn.Left = i * (buttonSize + padding);
                     btn.Top = j * (buttonSize + padding);
-                    btn.BackColor = Color.LightGray; 
+                    btn.BackColor = Color.LightGray;
                     btn.Tag = false;
 
                     if (index < karty.Count)
                     {
                         btn.Tag = karty[index];
-                        index++;  
+                        index++;
                     }
-
 
                     btn.Click += ObracanieKarty;
 
@@ -79,70 +92,77 @@ namespace PO_WIZ_gra_krokodyl
 
             this.ClientSize = new Size(
                 ustawienia.x * (buttonSize + padding),
-                ustawienia.y * (buttonSize + padding)
+                ustawienia.y * (buttonSize + padding) + 50 
             );
 
+            panelCzas = new Panel();
+            panelCzas.Dock = DockStyle.Bottom;
+            panelCzas.Height = 50;
+            panelCzas.BackColor = Color.Transparent;
+
+            lblCzas = new Label();
+            lblCzas.AutoSize = true;
+            lblCzas.Font = new Font("Arial", 14, FontStyle.Bold);
+            lblCzas.ForeColor = Color.Black;
+            lblCzas.Text = $"Czas: {czasPozostaly}s";
+            panelCzas.Controls.Add(lblCzas);  
+
+            this.Controls.Add(panelCzas);  
         }
 
-        private async void ObracanieKarty(object sender, EventArgs e)
+
+        private void ObracanieKarty(object sender, EventArgs e)
         {
             Button btn = (Button)sender;
             string typKarty = (string)btn.Tag;
 
-            if (typKarty == "szop")
+            if (typKarty == "krokodyl")
             {
                 if (btn.BackColor == Color.LightGray)
                 {
                     btn.BackColor = Color.White;
                     btn.Text = typKarty;
+                    odkryteKrokodyle[btn] = DateTime.Now;
                 }
-                else
+                else if (btn.BackColor == Color.White && odkryteKrokodyle.ContainsKey(btn))
                 {
                     btn.BackColor = Color.LightGray;
                     btn.Text = "";
+                    odkryteKrokodyle.Remove(btn);
                 }
-
-                await Task.Delay(2000);
-
-                UkryjKarteISasiadow(btn);
             }
-            else if (typKarty == "krokodyl")
+            else if (typKarty == "szop")
+            {
+                btn.BackColor = Color.White;
+                btn.Text = typKarty;
+
+                var _ = Task.Delay(2000).ContinueWith(_ =>
+                {
+                    this.Invoke(new Action(() =>
+                    {
+                        UkryjKarteISasiadow(btn);
+                    }));
+                });
+            }
+            else if (typKarty == "dydelf")
             {
                 if (btn.BackColor == Color.LightGray)
                 {
                     btn.BackColor = Color.White;
                     btn.Text = typKarty;
-                }
 
-                var tcs = new TaskCompletionSource<bool>();
+                    odkryteDydelfy++;
 
-                EventHandler clickHandler = null;
-                clickHandler = (s, ev) =>
-                {
-                    if (btn.BackColor == Color.White)
+                    if (odkryteDydelfy >= ustawienia.dydelf)
                     {
-                        btn.BackColor = Color.LightGray;
-                        btn.Text = "";
-                        tcs.TrySetResult(true);
-                        btn.Click -= clickHandler;
+                        timer.Stop();
+                        MessageBox.Show("Gratulacje! Odkryłeś wszystkie dydelfy. Wygrałeś!", "Wygrana", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        this.Close();
                     }
-                };
 
-                btn.Click += clickHandler;
-
-
-                await Task.Yield();
-
-
-                var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(5000));
-
-                if (completedTask != tcs.Task)
-                {
-                    MessageBox.Show("Przegrałeś! Czas na odwrócenie karty minął.");
-                    this.Close();
                 }
             }
-            else
+            else 
             {
                 if (btn.BackColor == Color.LightGray)
                 {
@@ -159,14 +179,22 @@ namespace PO_WIZ_gra_krokodyl
 
         private void UkryjKarteISasiadow(Button btn)
         {
+            bool btnWasDydelf = (string)btn.Tag == "dydelf" && btn.BackColor == Color.White;
             UkryjIkoneKarty(btn);
+            if (btnWasDydelf)
+                odkryteDydelfy--;
 
             List<Button> sasiedzi = PobierzSasiadow(btn);
-            foreach (Button sasiedniBtn in sasiedzi)
+
+            foreach (Button sasiad in sasiedzi)
             {
-                UkryjIkoneKarty(sasiedniBtn);
+                bool sasiadWasDydelf = (string)sasiad.Tag == "dydelf" && sasiad.BackColor == Color.White;
+                UkryjIkoneKarty(sasiad);
+                if (sasiadWasDydelf)
+                    odkryteDydelfy--;
             }
         }
+
 
         private void UkryjIkoneKarty(Button btn)
         {
@@ -177,8 +205,8 @@ namespace PO_WIZ_gra_krokodyl
         private List<Button> PobierzSasiadow(Button btn)
         {
             List<Button> sasiedzi = new List<Button>();
-            int rozmiarPrzycisku = 200; 
-            int padding = 10;  
+            int rozmiarPrzycisku = 200;
+            int padding = 10;
 
             int btnLeft = btn.Left;
             int btnTop = btn.Top;
@@ -187,24 +215,20 @@ namespace PO_WIZ_gra_krokodyl
             {
                 if (control is Button && control != btn)
                 {
-                    Button sasiedniBtn = (Button)control;
-                    int sasiedniLeft = sasiedniBtn.Left;
-                    int sasiedniTop = sasiedniBtn.Top;
+                    Button b = (Button)control;
+                    int left = b.Left;
+                    int top = b.Top;
 
-                    if ((Math.Abs(btnLeft - sasiedniLeft) == rozmiarPrzycisku + padding && btnTop == sasiedniTop) ||
-                        (Math.Abs(btnTop - sasiedniTop) == rozmiarPrzycisku + padding && btnLeft == sasiedniLeft))
+                    if ((Math.Abs(btnLeft - left) == rozmiarPrzycisku + padding && btnTop == top) ||
+                        (Math.Abs(btnTop - top) == rozmiarPrzycisku + padding && btnLeft == left))
                     {
-                        sasiedzi.Add(sasiedniBtn);
+                        sasiedzi.Add(b);
                     }
                 }
             }
 
             return sasiedzi;
         }
-
-
-
-
 
         private List<string> przygotujKarty()
         {
@@ -220,11 +244,8 @@ namespace PO_WIZ_gra_krokodyl
                 karty.Add("dydelf");
 
             int liczbaPrzyciskow = ustawienia.x * ustawienia.y;
-
             while (karty.Count < liczbaPrzyciskow)
-            {
-                karty.Add("pusta");  
-            }
+                karty.Add("pusta");
 
             Random rand = new Random();
             return karty.OrderBy(x => rand.Next()).ToList();
@@ -232,7 +253,6 @@ namespace PO_WIZ_gra_krokodyl
 
         private void Form3_Load(object sender, EventArgs e)
         {
-
         }
     }
 }
